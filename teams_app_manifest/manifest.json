@@ -1,0 +1,39 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.5/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.5",
+  "version": "1.0",
+  "id": "bd4a8cbe-4d70-4b91-8c88-44924e845309",
+  "packageName": "com.microsoft.teams.fileupload",
+  "developer": {
+    "name": "Kokul Jose",
+    "websiteUrl": "https://example.azurewebsites.net",
+    "privacyUrl": "https://example.azurewebsites.net/privacy",
+    "termsOfUseUrl": "https://example.azurewebsites.net/termsofuse"
+  },
+  "name": {
+    "short": "Python_Teams",
+    "full": "Python_Teams"
+  },
+  "description": {
+    "short": "Python Bot",
+    "full": "Python Bot"
+  },
+  "icons": {
+    "outline": "icon-outline.png",
+    "color": "icon-color.png"
+  },
+  "accentColor": "#abcdef",
+  "bots": [
+    {
+      "botId": "bd4a8cbe-4d70-4b91-8c88-44924e845309",
+      "scopes": [
+        "personal"
+      ],
+      "supportsFiles": true
+    }
+  ],
+  "validDomains": [
+    "*.azurewebsites.net",
+    "*.botframework.com"
+  ]
+}
