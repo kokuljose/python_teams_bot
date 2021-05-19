@@ -138,7 +138,12 @@ class TeamsFileUploadBot(TeamsActivityHandler):
                 f"Thanks your new threshold is {text}", "xml"
             )
             await turn_context.send_activity(reply)
-
+        else:
+            reply = self._create_reply(
+                turn_context.activity,
+                f"Sorry, I couldn't Understand. Please Enter a valid Value.", "xml"
+            )
+            await turn_context.send_activity(reply)
 
     def _send_suggested_actions_reportparameters_options(self) -> Attachment:
         card = HeroCard(
