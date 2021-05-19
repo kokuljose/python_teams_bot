@@ -1,18 +1,23 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-from datetime import datetime
+from datetime import datetime,date
 import os
 import csv
 import requests
-from botbuilder.core import TurnContext
+from botbuilder.core import TurnContext,ActivityHandler, MessageFactory, CardFactory
 from botbuilder.core.teams import TeamsActivityHandler
 from botbuilder.schema import (
     Activity,
+    Attachment,
     ChannelAccount,
     ActivityTypes,
     ConversationAccount,
     Attachment,
+    CardAction,
+    ActionTypes,
+    HeroCard,
+    SuggestedActions
 )
 from botbuilder.schema.teams import (
     FileDownloadInfo,
@@ -32,63 +37,59 @@ class TeamsFileUploadBot(TeamsActivityHandler):
         )
 
         if message_with_file_download:
-            # Save an uploaded file locally
             file = turn_context.activity.attachments[0]
             file_download = FileDownloadInfo.deserialize(file.content)
             file_path = "files/" + file.name
 
             response = requests.get(file_download.download_url, allow_redirects=True)
             open(file_path, "wb").write(response.content)
-            reader = csv.reader(file_path, delimiter=',')
-            ncol = len(next(reader))
+            with open(file_path) as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=',')
+                line_count = 0
+                for row in csv_reader:
+                    if line_count == 0:
+                        head=", ".join(row)
             reply = self._create_reply(
-                turn_context.activity, f"Your parameters have been updated using the template in <b>{file.name}</b> with {ncol}", "xml"
+                turn_context.activity, f"Your parameters have been updated using the template in <b>{file.name}</b> with Headings <b>{head}</b>", "xml"
             )
             await turn_context.send_activity(reply)
         elif turn_context.activity.text != None:
-            text = turn_context.activity.text.lower()
-            response_text = self._process_input(text)
-        else:
-            # Attempt to upload a file to Teams.  This will display a confirmation to
-            # the user (Accept/Decline card).  If they accept, on_teams_file_consent_accept
-            # will be called, otherwise on_teams_file_consent_decline.
-            filename = "report.xlsx"
+            text = turn_context.activity.text
+            filename = "report.csv"
             file_path = "files/" + filename
             file_size = os.path.getsize(file_path)
+            await self._process_input(turn_context,text,filename, file_size)
+        else:
+            filename = "report.csv"
             reply = self._create_reply(
                 turn_context.activity, f"Hello, Rod today is {date.today().strftime('%B %d, %Y')}, would you like to see the report?", "xml"
             )
             await turn_context.send_activity(reply)
-            await self._send_suggested_actions_yes_no(turn_context)
-            #await self._send_file_card(turn_context, filename, file_size)
+            reply = MessageFactory.list([])
+            reply.attachments.append(self._send_suggested_actions_yes_no())
+            await turn_context.send_activity(reply)
 
-    async def _send_suggested_actions_yes_no(self, turn_context: TurnContext):
-        """
-        Creates and sends an activity with suggested actions to the user. When the user
-        clicks one of the buttons the text value from the "CardAction" will be displayed
-        in the channel just as if the user entered the text. There are multiple
-        "ActionTypes" that may be used for different situations.
-        """
-
-        reply = MessageFactory.text("What is your favorite color?")
-
-        reply.suggested_actions = SuggestedActions(
-            actions=[
+    def _send_suggested_actions_yes_no(self) -> Attachment:
+        card = HeroCard(
+            text=f"Hello, Rod today is {date.today().strftime('%B %d, %Y')}, would you like to see the report?",
+            buttons=[
                 CardAction(
-                    title="Yes",
-                    type=ActionTypes.im_back,
-                    value="Yes, I want to see the report."
+                    type=ActionTypes.im_back, title="Yes", value="Yes, I want to see the Report."
                 ),
                 CardAction(
-                    title="No",
-                    type=ActionTypes.im_back,
-                    value="No, I don't want to see the report.",
+                    type=ActionTypes.im_back, title="No", value="No, I don't want to see the Report."
                 ),
-            ]
+            ],
         )
-        return await turn_context.send_activity(reply)
 
-    def _process_input(self, text: str):
+        return CardFactory.hero_card(card)
+
+    async def _process_input(self,turn_context: TurnContext, text: str, filename: str, file_size: int):
+
+        if text.find("hello")!=-1:
+            reply = MessageFactory.list([])
+            reply.attachments.append(self._send_suggested_actions_yes_no())
+            await turn_context.send_activity(reply)
 
         if text.find("Yes, I want to see the Report.")!=-1 or text.find("report")!=-1:
             await self._send_file_card(turn_context, filename, file_size)
@@ -104,12 +105,16 @@ class TeamsFileUploadBot(TeamsActivityHandler):
                 f"ThankYou. Get back to me when you need it. I'm here to serve you!", "xml"
             )
             await turn_context.send_activity(reply)
+            return await step_context.end_dialog()
 
         if text.find("settings")!=-1:
             reply = self._create_reply(
                 turn_context.activity,
                 f"Would you like to update report parameters or the options for this report?", "xml"
             )
+            await turn_context.send_activity(reply)
+            reply=MessageFactory.list([])
+            reply.attachments.append(self._send_suggested_actions_reportparameters_options())
             await turn_context.send_activity(reply)
 
         if text.find("Update Report Parameters for Report")!=-1:
@@ -135,31 +140,20 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             await turn_context.send_activity(reply)
 
 
-    async def _send_suggested_actions_reportparameters_options(self, turn_context: TurnContext):
-        """
-        Creates and sends an activity with suggested actions to the user. When the user
-        clicks one of the buttons the text value from the "CardAction" will be displayed
-        in the channel just as if the user entered the text. There are multiple
-        "ActionTypes" that may be used for different situations.
-        """
-
-        reply = MessageFactory.text("What is your favorite color?")
-
-        reply.suggested_actions = SuggestedActions(
-            actions=[
+    def _send_suggested_actions_reportparameters_options(self) -> Attachment:
+        card = HeroCard(
+            text="Would you like to update report parameters or the options for this report?",
+            buttons=[
                 CardAction(
-                    title="Report Parameters",
-                    type=ActionTypes.im_back,
-                    value="Update Report Parameters for Report"
+                    type=ActionTypes.im_back, title="Report Parameters", value="Update Report Parameters for Report"
                 ),
                 CardAction(
-                    title="Options",
-                    type=ActionTypes.im_back,
-                    value="Update Options for Report",
+                    type=ActionTypes.im_back, title="Options", value="Update Options for Report"
                 ),
-            ]
+            ],
         )
-        return await turn_context.send_activity(reply)
+
+        return CardFactory.hero_card(card)
 
     async def _send_file_card(
             self, turn_context: TurnContext, filename: str, file_size: int
