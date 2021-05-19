@@ -3,7 +3,7 @@
 
 from datetime import datetime
 import os
-
+import csv
 import requests
 from botbuilder.core import TurnContext
 from botbuilder.core.teams import TeamsActivityHandler
@@ -39,11 +39,15 @@ class TeamsFileUploadBot(TeamsActivityHandler):
 
             response = requests.get(file_download.download_url, allow_redirects=True)
             open(file_path, "wb").write(response.content)
-
+            reader = csv.reader(file_path, delimiter=',')
+            ncol = len(next(reader))
             reply = self._create_reply(
-                turn_context.activity, f"Your parameters have been updated using the template in <b>{file.name}</b>", "xml"
+                turn_context.activity, f"Your parameters have been updated using the template in <b>{file.name}</b> with {ncol}", "xml"
             )
             await turn_context.send_activity(reply)
+        elif turn_context.activity.text != None:
+            text = turn_context.activity.text.lower()
+            response_text = self._process_input(text)
         else:
             # Attempt to upload a file to Teams.  This will display a confirmation to
             # the user (Accept/Decline card).  If they accept, on_teams_file_consent_accept
@@ -52,10 +56,110 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             file_path = "files/" + filename
             file_size = os.path.getsize(file_path)
             reply = self._create_reply(
-                turn_context.activity, f"Hello, the lorum ipsum number today is 10, would you like to see the report?", "xml"
+                turn_context.activity, f"Hello, Rod today is {date.today().strftime('%B %d, %Y')}, would you like to see the report?", "xml"
             )
             await turn_context.send_activity(reply)
+            await self._send_suggested_actions_yes_no(turn_context)
+            #await self._send_file_card(turn_context, filename, file_size)
+
+    async def _send_suggested_actions_yes_no(self, turn_context: TurnContext):
+        """
+        Creates and sends an activity with suggested actions to the user. When the user
+        clicks one of the buttons the text value from the "CardAction" will be displayed
+        in the channel just as if the user entered the text. There are multiple
+        "ActionTypes" that may be used for different situations.
+        """
+
+        reply = MessageFactory.text("What is your favorite color?")
+
+        reply.suggested_actions = SuggestedActions(
+            actions=[
+                CardAction(
+                    title="Yes",
+                    type=ActionTypes.im_back,
+                    value="Yes, I want to see the report."
+                ),
+                CardAction(
+                    title="No",
+                    type=ActionTypes.im_back,
+                    value="No, I don't want to see the report.",
+                ),
+            ]
+        )
+        return await turn_context.send_activity(reply)
+
+    def _process_input(self, text: str):
+
+        if text.find("Yes, I want to see the Report.")!=-1 or text.find("report")!=-1:
             await self._send_file_card(turn_context, filename, file_size)
+            reply = self._create_reply(
+                turn_context.activity,
+                f"Please type 'settings' to update report settings", "xml"
+            )
+            await turn_context.send_activity(reply)
+
+        if text.find("No, I don't want to see the Report.")!=-1:
+            reply = self._create_reply(
+                turn_context.activity,
+                f"ThankYou. Get back to me when you need it. I'm here to serve you!", "xml"
+            )
+            await turn_context.send_activity(reply)
+
+        if text.find("settings")!=-1:
+            reply = self._create_reply(
+                turn_context.activity,
+                f"Would you like to update report parameters or the options for this report?", "xml"
+            )
+            await turn_context.send_activity(reply)
+
+        if text.find("Update Report Parameters for Report")!=-1:
+            await self._send_file_card(turn_context, filename, file_size)
+            reply = self._create_reply(
+                turn_context.activity,
+                f"Please update the template and upload.", "xml"
+            )
+            await turn_context.send_activity(reply)
+
+        if text.find("Update Options for Report")!=-1:
+            reply = self._create_reply(
+                turn_context.activity,
+                f"What threshold would you like to set for this report?", "xml"
+            )
+            await turn_context.send_activity(reply)
+
+        if all([xi in '1234567890' for xi in text.lstrip('-')]):
+            reply = self._create_reply(
+                turn_context.activity,
+                f"Thanks your new threshold is {text}", "xml"
+            )
+            await turn_context.send_activity(reply)
+
+
+    async def _send_suggested_actions_reportparameters_options(self, turn_context: TurnContext):
+        """
+        Creates and sends an activity with suggested actions to the user. When the user
+        clicks one of the buttons the text value from the "CardAction" will be displayed
+        in the channel just as if the user entered the text. There are multiple
+        "ActionTypes" that may be used for different situations.
+        """
+
+        reply = MessageFactory.text("What is your favorite color?")
+
+        reply.suggested_actions = SuggestedActions(
+            actions=[
+                CardAction(
+                    title="Report Parameters",
+                    type=ActionTypes.im_back,
+                    value="Update Report Parameters for Report"
+                ),
+                CardAction(
+                    title="Options",
+                    type=ActionTypes.im_back,
+                    value="Update Options for Report",
+                ),
+            ]
+        )
+        return await turn_context.send_activity(reply)
 
     async def _send_file_card(
             self, turn_context: TurnContext, filename: str, file_size: int
