@@ -5,14 +5,18 @@ from datetime import datetime,date
 import os
 import csv
 import requests
+import time
+from typing import List, Dict
 from botbuilder.core import TurnContext,ActivityHandler, MessageFactory, CardFactory
-from botbuilder.core.teams import TeamsActivityHandler
+from botbuilder.core.teams import TeamsActivityHandler, TeamsInfo,teams_get_channel_id
 from botbuilder.schema import (
     Activity,
     Attachment,
     ChannelAccount,
     ActivityTypes,
     ConversationAccount,
+    ConversationParameters,
+    ConversationReference,
     Attachment,
     CardAction,
     ActionTypes,
@@ -24,12 +28,42 @@ from botbuilder.schema.teams import (
     FileConsentCard,
     FileConsentCardResponse,
     FileInfoCard,
+    TeamInfo,
+    TeamsChannelAccount
 )
 from botbuilder.schema.teams.additional_properties import ContentType
 
 
 class TeamsFileUploadBot(TeamsActivityHandler):
+
+    def __init__(self, app_id: str, app_password: str,conversation_references: Dict[str, ConversationReference]):
+        self._app_id = app_id
+        self._app_password = app_password
+        self.conversation_references = conversation_references
+        
+
+    async def on_conversation_update_activity(self, turn_context: TurnContext):
+        await self._add_conversation_reference(turn_context)
+        
+        return await super().on_conversation_update_activity(turn_context)
+
+    async def on_teams_members_added(  # pylint: disable=unused-argument
+            self,
+            teams_members_added: [TeamsChannelAccount],
+            team_info: TeamInfo,
+            turn_context: TurnContext,
+    ):
+        await self._add_conversation_reference(turn_context)
+        for member in teams_members_added:
+            if member.id != turn_context.activity.recipient.id:
+                await turn_context.send_activity(
+                    f"Welcome to the team {member.given_name} {member.surname}. "
+                )
+
+
     async def on_message_activity(self, turn_context: TurnContext):
+        
+        await self._add_conversation_reference(turn_context)
         message_with_file_download = (
             False
             if not turn_context.activity.attachments
@@ -66,12 +100,12 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             )
             await turn_context.send_activity(reply)
             reply = MessageFactory.list([])
-            reply.attachments.append(self._send_suggested_actions_yes_no())
+            reply.attachments.append(self._send_suggested_actions_yes_no("Rod"))
             await turn_context.send_activity(reply)
 
-    def _send_suggested_actions_yes_no(self) -> Attachment:
+    def _send_suggested_actions_yes_no(self,name:str) -> Attachment:
         card = HeroCard(
-            text=f"Hello, Rod today is {date.today().strftime('%B %d, %Y')}, would you like to see the report?",
+            text=f"Hello, {name} today is {date.today().strftime('%B %d, %Y')}, would you like to see the report?",
             buttons=[
                 CardAction(
                     type=ActionTypes.im_back, title="Yes", value="Yes, I want to see the Report."
@@ -87,11 +121,23 @@ class TeamsFileUploadBot(TeamsActivityHandler):
     async def _process_input(self,turn_context: TurnContext, text: str, filename: str, file_size: int):
 
         if text.find("hello")!=-1:
-            reply = MessageFactory.list([])
-            reply.attachments.append(self._send_suggested_actions_yes_no())
+            await self._message_all_members(turn_context)
+            reply = self._create_reply(
+                turn_context.activity,
+                f"Successfully Send the Message", "xml"
+            )
             await turn_context.send_activity(reply)
 
-        if text.find("Yes, I want to see the Report.")!=-1 or text.find("report")!=-1:
+        elif text.find("MessageAllMembers")!=-1:
+
+            await self._message_all_members(turn_context)
+            reply = self._create_reply(
+                turn_context.activity,
+                f"Successfully Messaged All Members", "xml"
+            )
+            await turn_context.send_activity(reply)
+
+        elif text.find("Yes, I want to see the Report.")!=-1 or text.find("report")!=-1:
             await self._send_file_card(turn_context, filename, file_size)
             reply = self._create_reply(
                 turn_context.activity,
@@ -99,15 +145,15 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             )
             await turn_context.send_activity(reply)
 
-        if text.find("No, I don't want to see the Report.")!=-1:
+        elif text.find("No, I don't want to see the Report.")!=-1:
             reply = self._create_reply(
                 turn_context.activity,
                 f"ThankYou. Get back to me when you need it. I'm here to serve you!", "xml"
             )
             await turn_context.send_activity(reply)
-            return await step_context.end_dialog()
 
-        if text.find("settings")!=-1:
+
+        elif text.find("settings")!=-1:
             reply = self._create_reply(
                 turn_context.activity,
                 f"Would you like to update report parameters or the options for this report?", "xml"
@@ -117,7 +163,7 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             reply.attachments.append(self._send_suggested_actions_reportparameters_options())
             await turn_context.send_activity(reply)
 
-        if text.find("Update Report Parameters for Report")!=-1:
+        elif text.find("Update Report Parameters for Report")!=-1:
             await self._send_file_card(turn_context, filename, file_size)
             reply = self._create_reply(
                 turn_context.activity,
@@ -125,14 +171,14 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             )
             await turn_context.send_activity(reply)
 
-        if text.find("Update Options for Report")!=-1:
+        elif text.find("Update Options for Report")!=-1:
             reply = self._create_reply(
                 turn_context.activity,
                 f"What threshold would you like to set for this report?", "xml"
             )
             await turn_context.send_activity(reply)
 
-        if all([xi in '1234567890' for xi in text.lstrip('-')]):
+        elif all([xi in '1234567890' for xi in text.lstrip('-')]):
             reply = self._create_reply(
                 turn_context.activity,
                 f"Thanks your new threshold is {text}", "xml"
@@ -295,3 +341,109 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             text_format=text_format or None,
             locale=activity.locale,
         )
+        
+    async def _message_all_members(self, turn_context: TurnContext):
+        team_members = await self._get_paged_members(turn_context)
+
+        for member in team_members:
+            conversation_reference = TurnContext.get_conversation_reference(
+                turn_context.activity
+            )
+            #await self._add_conversation_reference(turn_context)
+
+            conversation_parameters = ConversationParameters(
+                is_group=False,
+                bot=turn_context.activity.recipient,
+                members=[member],
+                tenant_id=turn_context.activity.conversation.tenant_id,
+            )
+
+            async def get_ref(tc1):
+                conversation_reference_inner = TurnContext.get_conversation_reference(
+                    tc1.activity
+                )
+                return await tc1.adapter.continue_conversation(
+                    conversation_reference_inner, send_message, self._app_id
+                )
+
+            async def send_message(tc2: TurnContext):
+                reply = MessageFactory.list([])
+                reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
+
+                return await tc2.send_activity(reply)
+                
+
+            await turn_context.adapter.create_conversation(
+                conversation_reference, get_ref, conversation_parameters
+            )
+            #await self._add_conversation_reference(turn_context)
+        await turn_context.send_activity(
+            MessageFactory.text("All messages have been sent")
+        )
+
+    async def _get_paged_members(
+        self, turn_context: TurnContext
+    ) -> List[TeamsChannelAccount]:
+        paged_members = []
+        continuation_token = None
+
+        while True:
+            current_page = await TeamsInfo.get_paged_members(
+                turn_context, continuation_token, 100
+            )
+            continuation_token = current_page.continuation_token
+            paged_members.extend(current_page.members)
+
+            if continuation_token is None:
+                break
+
+        return paged_members
+
+    async def _add_conversation_reference(self, turn_context: TurnContext):
+        conversation_reference = TurnContext.get_conversation_reference(turn_context.activity)
+        if conversation_reference.conversation.conversation_type =='personal':
+            self.conversation_references[
+                conversation_reference.user.id
+            ] = conversation_reference
+        else:
+            team_members = await self._get_paged_members(turn_context)
+            for member in team_members:
+                conversation_reference = TurnContext.get_conversation_reference(
+                    turn_context.activity
+                )
+                # await self._add_conversation_reference(turn_context)
+
+                conversation_parameters = ConversationParameters(
+                    is_group=False,
+                    bot=turn_context.activity.recipient,
+                    members=[member],
+                    tenant_id=turn_context.activity.conversation.tenant_id,
+                )
+
+                async def get_ref(tc1):
+                    conversation_reference_inner = TurnContext.get_conversation_reference(
+                        tc1.activity
+                    )
+                    return await tc1.adapter.continue_conversation(
+                        conversation_reference_inner, send_message, self._app_id
+                    )
+
+                async def send_message(tc2: TurnContext):
+                    reply = MessageFactory.list([])
+                    reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
+                    new_conversation_reference = TurnContext.get_conversation_reference(tc2.activity)
+                    new_conversation_reference.user=member
+                    self.conversation_references[
+                        new_conversation_reference.user.id
+                    ] = new_conversation_reference
+                    return await tc2.send_activity(reply)
+
+                await turn_context.adapter.create_conversation(
+                    conversation_reference, get_ref, conversation_parameters
+                )
+
+                # await self._add_conversation_reference(turn_context)
+            await turn_context.send_activity(
+                MessageFactory.text("All messages have been sent")
+            )
+
