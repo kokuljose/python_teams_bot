@@ -145,20 +145,7 @@ async def _send_proactive_message():
         #reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
         #return await turn_context.send_activity(reply)
 
-    def _send_suggested_actions_yes_no(name:str) -> Attachment:
-        card = HeroCard(
-            text=f"Hello, {name} today is {date.today().strftime('%B %d, %Y')}, would you like to see the report?",
-            buttons=[
-                CardAction(
-                    type=ActionTypes.im_back, title="Yes", value="Yes, I want to see the Report."
-                ),
-                CardAction(
-                    type=ActionTypes.im_back, title="No", value="No, I don't want to see the Report."
-                ),
-            ],
-        )
 
-        return CardFactory.hero_card(card)
 def init_func(argv):
     APP = web.Application(middlewares=[aiohttp_error_middleware])
     APP.router.add_post("/api/messages", messages)
