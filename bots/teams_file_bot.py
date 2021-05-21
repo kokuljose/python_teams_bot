@@ -90,10 +90,24 @@ class TeamsFileUploadBot(TeamsActivityHandler):
             await turn_context.send_activity(reply)
         elif turn_context.activity.text != None:
             text = turn_context.activity.text
-            filename = "report.csv"
-            file_path = "files/" + filename
-            file_size = os.path.getsize(file_path)
-            await self._process_input(turn_context,text,filename, file_size)
+            if turn_context.activity.conversation.conversation_type =='personal':
+                filename = "report.csv"
+                file_path = "files/" + filename
+                file_size = os.path.getsize(file_path)
+                await self._process_input(turn_context,text,filename, file_size)
+            else:
+                if text.find("hello")!=-1:
+                    reply = self._create_reply(
+                        turn_context.activity,
+                        f"Thanks for Adding me Here", "xml"
+                    )
+                    await turn_context.send_activity(reply)
+                else:
+                    reply = self._create_reply(
+                        turn_context.activity,
+                        f"Sorry i could not serve your queries here, Please DM", "xml"
+                    )
+                    await turn_context.send_activity(reply)
         else:
             filename = "report.csv"
             reply = self._create_reply(
