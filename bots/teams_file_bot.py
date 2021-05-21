@@ -406,42 +406,37 @@ class TeamsFileUploadBot(TeamsActivityHandler):
         else:
             team_members = await self._get_paged_members(turn_context)
             for member in team_members:
-                conversation_reference = TurnContext.get_conversation_reference(
-                    turn_context.activity
-                )
-                # await self._add_conversation_reference(turn_context)
-
-                conversation_parameters = ConversationParameters(
-                    is_group=False,
-                    bot=turn_context.activity.recipient,
-                    members=[member],
-                    tenant_id=turn_context.activity.conversation.tenant_id,
-                )
-
-                async def get_ref(tc1):
-                    conversation_reference_inner = TurnContext.get_conversation_reference(
-                        tc1.activity
+                if member.id in self.conversation_references:
+                    conversation_reference = TurnContext.get_conversation_reference(
+                        turn_context.activity
                     )
-                    return await tc1.adapter.continue_conversation(
-                        conversation_reference_inner, send_message, self._app_id
+                    # await self._add_conversation_reference(turn_context)
+
+                    conversation_parameters = ConversationParameters(
+                        is_group=False,
+                        bot=turn_context.activity.recipient,
+                        members=[member],
+                        tenant_id=turn_context.activity.conversation.tenant_id,
                     )
 
-                async def send_message(tc2: TurnContext):
-                    reply = MessageFactory.list([])
-                    reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
-                    new_conversation_reference = TurnContext.get_conversation_reference(tc2.activity)
-                    new_conversation_reference.user=member
-                    self.conversation_references[
-                        new_conversation_reference.user.id
-                    ] = new_conversation_reference
-                    return await tc2.send_activity(reply)
+                    async def get_ref(tc1):
+                        conversation_reference_inner = TurnContext.get_conversation_reference(
+                            tc1.activity
+                        )
+                        return await tc1.adapter.continue_conversation(
+                            conversation_reference_inner, send_message, self._app_id
+                        )
 
-                await turn_context.adapter.create_conversation(
-                    conversation_reference, get_ref, conversation_parameters
-                )
+                    async def send_message(tc2: TurnContext):
+                        reply = MessageFactory.list([])
+                        reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
+                        new_conversation_reference = TurnContext.get_conversation_reference(tc2.activity)
+                        new_conversation_reference.user=member
+                        self.conversation_references[
+                            new_conversation_reference.user.id
+                        ] = new_conversation_reference
+                        return await tc2.send_activity(reply)
 
-                # await self._add_conversation_reference(turn_context)
-            await turn_context.send_activity(
-                MessageFactory.text("All messages have been sent")
-            )
-
+                    await turn_context.adapter.create_conversation(
+                        conversation_reference, get_ref, conversation_parameters
+                    )
