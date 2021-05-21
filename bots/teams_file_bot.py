@@ -420,7 +420,7 @@ class TeamsFileUploadBot(TeamsActivityHandler):
         else:
             team_members = await self._get_paged_members(turn_context)
             for member in team_members:
-                if member.id in self.conversation_references:
+                if member.id not in self.conversation_references:
                     conversation_reference = TurnContext.get_conversation_reference(
                         turn_context.activity
                     )
@@ -442,6 +442,7 @@ class TeamsFileUploadBot(TeamsActivityHandler):
                         )
 
                     async def send_message(tc2: TurnContext):
+
                         reply = MessageFactory.list([])
                         reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
                         new_conversation_reference = TurnContext.get_conversation_reference(tc2.activity)
