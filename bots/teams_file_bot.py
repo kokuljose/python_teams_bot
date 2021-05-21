@@ -56,9 +56,10 @@ class TeamsFileUploadBot(TeamsActivityHandler):
         await self._add_conversation_reference(turn_context)
         for member in teams_members_added:
             if member.id != turn_context.activity.recipient.id:
-                await turn_context.send_activity(
-                    f"Welcome to the team {member.given_name} {member.surname}. "
-                )
+                reply = MessageFactory.list([])
+                reply.attachments.append(self._send_suggested_actions_yes_no(member.given_name))
+                await turn_context.send_activity(reply)
+
 
 
     async def on_message_activity(self, turn_context: TurnContext):
