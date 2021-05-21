@@ -121,11 +121,8 @@ class TeamsFileUploadBot(TeamsActivityHandler):
     async def _process_input(self,turn_context: TurnContext, text: str, filename: str, file_size: int):
 
         if text.find("hello")!=-1:
-            await self._message_all_members(turn_context)
-            reply = self._create_reply(
-                turn_context.activity,
-                f"Successfully Send the Message", "xml"
-            )
+            reply = MessageFactory.list([])
+            reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
             await turn_context.send_activity(reply)
 
         elif text.find("MessageAllMembers")!=-1:

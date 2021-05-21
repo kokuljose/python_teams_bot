@@ -11,12 +11,12 @@
     "termsOfUseUrl": "https://example.azurewebsites.net/termsofuse"
   },
   "name": {
-    "short": "Python_Teams",
-    "full": "Python_Teams"
+    "short": "Python_Teams_Bot",
+    "full": "Python_Teams_Bot"
   },
   "description": {
-    "short": "Python Bot2",
-    "full": "Python Bot2"
+    "short": "Bot",
+    "full": "Bot at your Service"
   },
   "icons": {
     "outline": "icon-outline.png",
