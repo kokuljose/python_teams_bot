@@ -123,7 +123,7 @@ class TeamsFileUploadBot(TeamsActivityHandler):
 
         if text.find("hello")!=-1:
             reply = MessageFactory.list([])
-            reply.attachments.append(self._send_suggested_actions_yes_no(member.name))
+            reply.attachments.append(self._send_suggested_actions_yes_no(""))
             await turn_context.send_activity(reply)
 
         elif text.find("MessageAllMembers")!=-1:
